@@ -31,12 +31,12 @@ Este projeto existe para aprender, na prática, os conceitos por trás de um pip
 
 ## Como rodar
 
-\`\`\`bash
+```bash
 docker compose up -d
 sqlx database create
 sqlx migrate run
 cargo run
-\`\`\`
+```
 
 Health check: \`curl localhost:3000/health\`
 
@@ -75,12 +75,12 @@ Este projeto existe para aprender, na prática, os conceitos por trás de um pip
 
 ## Como rodar
 
-\`\`\`bash
+```bash
 docker compose up -d
 sqlx database create
 sqlx migrate run
 cargo run
-\`\`\`
+```
 
 Health check: \`curl localhost:3000/health\`
 
