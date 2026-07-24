@@ -20,7 +20,7 @@ Este projeto existe para aprender, na prática, os conceitos por trás de um pip
 ## Roadmap
 
 - [x] **Fase 0** — Setup: projeto Axum + Tokio, Postgres com pgvector via Docker Compose, SQLx CLI, endpoint `/health`
-- [ ] **Fase 1** — Modelagem e persistência: schema `documents`/`chunks`, migrations, CRUD básico
+- [x] **Fase 1** — Modelagem e persistência: schema `documents`/`chunks`, migrations, CRUD básico
 - [ ] **Fase 2** — Ingestão de texto puro: endpoint de upload, chunking semântico
 - [ ] **Fase 3** — Embeddings locais: integração com `fastembed-rs`, persistência de vetores
 - [ ] **Fase 4** — Busca por similaridade: endpoint de query, índice IVFFlat/HNSW no pgvector
