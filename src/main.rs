@@ -9,8 +9,9 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
 use tracing_subscriber::fmt;
 
-use crate::handlers::{create_document_handler, get_document_handler, health_check_handler};
+use crate::handlers::{get_document_handler, health_check_handler, ingest_document_handler};
 
+mod chunking;
 mod db;
 mod handlers;
 
@@ -36,7 +37,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(health_check_handler))
-        .route("/documents", post(create_document_handler))
+        .route("/documents", post(ingest_document_handler))
         .route("/documents/{id}", get(get_document_handler))
         .with_state(state);
 

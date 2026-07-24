@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{AppState, db};
+use crate::{AppState, chunking, db};
 
 #[derive(Deserialize)]
 pub struct CreateDocumentPayload {
@@ -26,25 +26,42 @@ pub async fn health_check_handler() -> &'static str {
     "OK"
 }
 
-pub async fn create_document_handler(
+pub async fn ingest_document_handler(
     State(state): State<AppState>,
     Json(payload): Json<CreateDocumentPayload>,
 ) -> impl IntoResponse {
-    match db::create_document(&state.pool, &payload.title, &payload.content).await {
-        Ok(doc) => (
+    let chunk_contents = chunking::chunk_text(&payload.content);
+
+    if chunk_contents.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Documentm content produced no chunks",
+        )
+            .into_response();
+    }
+
+    match db::create_document_with_chunks(
+        &state.pool,
+        &payload.title,
+        &payload.content,
+        &chunk_contents,
+    )
+    .await
+    {
+        Ok((document, chunks)) => (
             StatusCode::CREATED,
-            Json(DocumentResponse {
-                id: doc.id,
-                title: doc.title,
-                content: doc.content,
-            }),
+            Json(serde_json::json!({
+                "id": document.id,
+                "title": document.title,
+                "chunks_created": chunks.len(),
+            })),
         )
             .into_response(),
         Err(e) => {
-            tracing::error!("Failed to create document: {:?}", e);
+            tracing::error!("Failed to ingest document: {:?}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to create document",
+                "Failed to ingest document",
             )
                 .into_response()
         }
