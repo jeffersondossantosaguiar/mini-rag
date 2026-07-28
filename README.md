@@ -58,3 +58,20 @@ O limite de tamanho do chunk é medido em caracteres nesta fase, como aproximaç
 `create_document_with_chunks` insere o documento e todos os seus chunks dentro de uma transação (`pool.begin()` / `tx.commit()`). Se qualquer insert falhar no meio do processo, a transação sofre rollback automático e nada fica salvo parcialmente.
 
 _Trade-off pendente_: os chunks ainda são inseridos um a um em um loop (N round-trips até o banco), não em batch. Transação resolve consistência, não performance — batch insert (via `UNNEST`) fica como otimização para a Fase 6.
+
+### Fase 3 — Embeddings locais
+
+**spawn_blocking para inferência CPU-bound**
+A geração de embeddings é síncrona e consome CPU (não tem `.await` interno). Rodar isso direto num handler async travaria a thread do runtime do Tokio, impedindo outras requests de serem processadas. `tokio::task::spawn_blocking` move essa carga para uma thread pool dedicada, análogo ao uso de Worker Threads no Node para não bloquear o event loop.
+
+**Arc<Mutex<TextEmbedding>> — uma instância compartilhada**
+O modelo carregado em memória é envolto em `Arc<Mutex<>>` para ser compartilhado entre requests com segurança. Isso significa que, hoje, apenas uma inferência roda por vez — requests concorrentes de embedding esperam a vez (fila). Por isso a geração de embeddings dos chunks durante a ingestão é feita sequencialmente, não em paralelo: paralelizar as chamadas não traria ganho real, já que todas disputariam o mesmo lock.
+
+**Contagem real de tokens (ao invés de caracteres)**
+O chunking mede o tamanho contra o limite real de sequência do modelo (256 tokens do `all-MiniLM-L6-v2`), usando o tokenizer real via crate `tokenizers`. O tokenizer é carregado de um arquivo local (`assets/tokenizer.json`) em vez de baixado via `from_pretrained` em runtime — evita depender de disponibilidade do Hugging Face Hub toda vez que o servidor sobe (nasceu de um erro real de 401 ao tentar baixar em runtime).
+
+## Melhorias futuras
+
+- **Pool de múltiplas instâncias do modelo de embedding** — hoje existe apenas uma instância protegida por `Mutex`, o que serializa a geração de embeddings mesmo sob carga concorrente. Ter um pool de N instâncias do modelo permitiria paralelismo real na geração de embeddings, ao custo de mais memória RAM (cada instância carrega os ~90MB do modelo).
+- **Suporte a múltiplos modelos de embedding** — permitir configurar/trocar o modelo de embedding (ex: um multilíngue focado em PT-BR, ou um maior/mais preciso) sem reescrever a lógica de negócio, exigiria abstrair `Embedder` atrás de uma interface e versionar a dimensão do vetor por modelo (hoje travada em `VECTOR(384)` na migration).
+- **Batch insert de chunks** — hoje os chunks são inseridos um a um dentro da transação (N round-trips ao banco). Migrar para um único `INSERT` via `UNNEST` reduziria overhead de rede.
