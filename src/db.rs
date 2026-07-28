@@ -1,3 +1,4 @@
+use pgvector::Vector;
 use sqlx::{Error, PgPool, prelude::FromRow, query_as, types::Uuid};
 
 #[derive(Debug, FromRow)]
@@ -19,7 +20,7 @@ pub async fn create_document_with_chunks(
     pool: &PgPool,
     title: &str,
     content: &str,
-    chunk_contents: &[String],
+    chunks_with_embeddings: &[(String, Vec<f32>)],
 ) -> Result<(Document, Vec<Chunk>), Error> {
     let mut tx = pool.begin().await?;
 
@@ -36,19 +37,22 @@ pub async fn create_document_with_chunks(
     .fetch_one(&mut *tx)
     .await?;
 
-    let mut chunks = Vec::with_capacity(chunk_contents.len());
+    let mut chunks = Vec::with_capacity(chunks_with_embeddings.len());
 
-    for (index, chunk_content) in chunk_contents.iter().enumerate() {
+    for (index, (chunk_content, embedding)) in chunks_with_embeddings.iter().enumerate() {
+        let vector = Vector::from(embedding.clone());
+
         let chunk = query_as!(
             Chunk,
             r#"
-            INSERT INTO chunks (document_id, content, chunk_index)
-            VALUES ($1, $2, $3)
+            INSERT INTO chunks (document_id, content, chunk_index, embedding)
+            VALUES ($1, $2, $3, $4)
             RETURNING id, document_id, content, chunk_index
             "#,
             document.id,
             chunk_content,
-            index as i32
+            index as i32,
+            vector as Vector
         )
         .fetch_one(&mut *tx)
         .await?;

@@ -9,15 +9,20 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
 use tracing_subscriber::fmt;
 
-use crate::handlers::{get_document_handler, health_check_handler, ingest_document_handler};
+use crate::{
+    embedding::Embedder,
+    handlers::{get_document_handler, health_check_handler, ingest_document_handler},
+};
 
 mod chunking;
 mod db;
+mod embedding;
 mod handlers;
 
 #[derive(Clone)]
 struct AppState {
     pool: PgPool,
+    embedder: Embedder,
 }
 
 #[tokio::main]
@@ -33,7 +38,9 @@ async fn main() {
         .await
         .expect("failed to connect to database");
 
-    let state = AppState { pool };
+    let embedder = Embedder::new().expect("failed to load embedding model");
+
+    let state = AppState { pool, embedder };
 
     let app = Router::new()
         .route("/health", get(health_check_handler))

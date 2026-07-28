@@ -30,7 +30,7 @@ pub async fn ingest_document_handler(
     State(state): State<AppState>,
     Json(payload): Json<CreateDocumentPayload>,
 ) -> impl IntoResponse {
-    let chunk_contents = chunking::chunk_text(&payload.content);
+    let chunk_contents = chunking::chunk_text(&payload.content, &state.embedder);
 
     if chunk_contents.is_empty() {
         return (
@@ -40,11 +40,27 @@ pub async fn ingest_document_handler(
             .into_response();
     }
 
+    let mut chunks_with_embeddings = Vec::with_capacity(chunk_contents.len());
+
+    for content in chunk_contents {
+        match state.embedder.embed(content.clone()).await {
+            Ok(embedding) => chunks_with_embeddings.push((content, embedding)),
+            Err(e) => {
+                tracing::error!("Failed to generate embedding for chunk: {:?}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to generate embedding for chunk",
+                )
+                    .into_response();
+            }
+        }
+    }
+
     match db::create_document_with_chunks(
         &state.pool,
         &payload.title,
         &payload.content,
-        &chunk_contents,
+        &chunks_with_embeddings,
     )
     .await
     {
