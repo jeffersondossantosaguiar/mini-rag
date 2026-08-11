@@ -16,6 +16,13 @@ pub struct Chunk {
     pub chunk_index: i32,
 }
 
+pub struct ChunkSearchResult {
+    pub chunk_id: Uuid,
+    pub document_id: Uuid,
+    pub content: String,
+    pub distance: f64,
+}
+
 pub async fn create_document_with_chunks(
     pool: &PgPool,
     title: &str,
@@ -102,4 +109,28 @@ pub async fn create_chunks(
     }
 
     Ok(chunks)
+}
+
+pub async fn search_similar_chunks(
+    pool: &PgPool,
+    query_embedding: Vector,
+    top_k: i64,
+) -> Result<Vec<ChunkSearchResult>, Error> {
+    query_as!(
+        ChunkSearchResult,
+        r#"
+        SELECT
+            chunks.id as chunk_id,
+            chunks.document_id,
+            chunks.content,
+            chunks.embedding <=> $1 as "distance!: f64"
+        FROM chunks
+        ORDER BY chunks.embedding <=> $1
+        LIMIT $2
+        "#,
+        query_embedding as _,
+        top_k
+    )
+    .fetch_all(pool)
+    .await
 }

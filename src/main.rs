@@ -11,7 +11,9 @@ use tracing_subscriber::fmt;
 
 use crate::{
     embedding::Embedder,
-    handlers::{get_document_handler, health_check_handler, ingest_document_handler},
+    handlers::{
+        get_document_handler, health_check_handler, ingest_document_handler, query_handler,
+    },
 };
 
 mod chunking;
@@ -46,6 +48,7 @@ async fn main() {
         .route("/health", get(health_check_handler))
         .route("/documents", post(ingest_document_handler))
         .route("/documents/{id}", get(get_document_handler))
+        .route("/query", post(query_handler))
         .with_state(state);
 
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();

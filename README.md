@@ -23,7 +23,7 @@ Este projeto existe para aprender, na prática, os conceitos por trás de um pip
 - [x] **Fase 1** — Modelagem e persistência: schema `documents`/`chunks`, migrations, CRUD básico
 - [x] **Fase 2** — Ingestão de texto puro: endpoint de upload, chunking semântico
 - [x] **Fase 3** — Embeddings locais: integração com `fastembed-rs`, persistência de vetores
-- [ ] **Fase 4** — Busca por similaridade: endpoint de query, índice IVFFlat/HNSW no pgvector
+- [x] **Fase 4** — Busca por similaridade: endpoint de query, índice IVFFlat/HNSW no pgvector
 - [ ] **Fase 5** — Integração com LLM: montagem de prompt com contexto recuperado, chamada à API, resposta com fontes
 - [ ] **Fase 6** — Robustez: tratamento de erros (`thiserror`), validação, rate limiting, logging estruturado
 - [ ] **Fase 7 (bônus)** — Suporte a outros formatos: PDF, DOCX
@@ -69,6 +69,150 @@ O modelo carregado em memória é envolto em `Arc<Mutex<>>` para ser compartilha
 
 **Contagem real de tokens (ao invés de caracteres)**
 O chunking mede o tamanho contra o limite real de sequência do modelo (256 tokens do `all-MiniLM-L6-v2`), usando o tokenizer real via crate `tokenizers`. O tokenizer é carregado de um arquivo local (`assets/tokenizer.json`) em vez de baixado via `from_pretrained` em runtime — evita depender de disponibilidade do Hugging Face Hub toda vez que o servidor sobe (nasceu de um erro real de 401 ao tentar baixar em runtime).
+
+## Fase 4 — Busca por Similaridade
+
+Endpoint `POST /query`: recebe uma pergunta em texto puro, gera o embedding via
+o mesmo `Embedder` usado na ingestão, e busca os chunks mais similares no
+Postgres via pgvector (`<=>`, cosine distance).
+
+### Decisões técnicas
+
+**Índice: HNSW em vez de IVFFlat**
+HNSW não exige treino prévio com dados representativos (IVFFlat precisa de
+uma amostra pra construir os clusters via k-means, ruim pra ingestão
+incremental como a nossa). Trade-off: construção do índice mais lenta e mais
+uso de RAM, mas melhor recall/latência de busca e não degrada com inserts
+sequenciais ao longo do tempo — que é exatamente o nosso padrão de uso.
+
+**Verbo HTTP: POST em vez de GET numa operação de busca**
+Tecnicamente quebra a convenção REST (GET = leitura, POST = escrita), mas o
+payload de entrada é texto livre potencialmente longo — query string tem
+limite prático de tamanho e é frágil pra texto com acentuação/caracteres
+especiais. Mesma escolha usada por APIs de busca semântica de mercado
+(Elasticsearch, Algolia).
+
+**Exposição de `similarity` em vez de `distance`**
+O pgvector retorna cosine _distance_ (0 = idêntico, 2 = oposto) — pouco
+intuitivo pra quem consome a API ("quanto menor, melhor" é contraintuitivo).
+Convertemos pra similarity (`1.0 - distance`) na fronteira handler↔API,
+mantendo o banco/índice trabalhando com distance (mais natural pro `ORDER BY`
+e pro índice).
+
+**Migrations nomeadas por schema, não por feature**
+A partir dessa fase, adotado o padrão `<timestamp>_<verbo>_<o_que>.sql`
+(ex: `add_hnsw_index_chunks_embedding.sql`). O nome descreve o que muda no
+schema, não em qual fase/feature foi feito — facilita entender o histórico
+do banco meses depois, sem depender de contexto do roadmap do produto.
+
+### Gotcha: `f32` vs `f64` no resultado do pgvector
+
+Os operadores `<=>` e `<#>` do pgvector retornam `double precision` (`f64`),
+não `real` (`f32`). Usar `sqlx::query_as!` com override de tipo
+(`"distance!: f32"`) **não gera erro de compilação** — o `!` desativa a
+checagem de tipo do SQLx. Em runtime, isso causa um bug silencioso: o SQLx
+decodifica os primeiros 4 bytes de um valor de 8 bytes como se fossem um
+`f32` completo, retornando um número plausível mas matematicamente sem
+relação com o valor real (reinterpretação binária, não conversão numérica).
+
+Sintoma observado: valores de `similarity` sempre negativos e, mais revelador,
+**idênticos independente do vetor de entrada** — sinal de que o resultado não
+tinha relação com o vetor calculado, e sim com um artefato de decodificação.
+
+Como foi encontrado: bisseção sistemática, eliminando camada por camada
+(tokenizer/pooling → ingestão → serialização do bind → operador SQL puro)
+até isolar com um teste de controle (vetor unitário conhecido `<#>` ele
+mesmo, esperado `-1.0` exato) que o erro só aparecia via SQLx com macro,
+nunca via `psql` direto — apontando pra decodificação, não cálculo.
+
+Correção: usar `f64` no struct de retorno e no override de tipo
+(`"distance!: f64"`), convertendo pra `f32` só na borda da API se necessário.
+
+**Lição geral**: overrides de tipo (`!:`) no SQLx desativam validação em
+compile-time — qualquer uso deles em coluna calculada (não vinda direto de
+uma coluna tipada da tabela) merece um teste de sanity check contra um valor
+matematicamente conhecido antes de confiar no resultado.
+
+### Pendência conhecida (não bloqueia a Fase 4)
+
+Identificada corrupção intermitente de espaços em texto de chunks após
+chunking (ex: "Para produtos" → "Paraprodutos"). Ainda não investigado a
+fundo — aparenta ser intermitente, não sistemático (alguns chunks do mesmo
+documento vêm corretos, outros não). Não afeta a lógica de busca vetorial em
+si (embeddings são gerados corretamente a partir do texto, corrompido ou
+não), mas degrada a qualidade do texto retornado ao usuário. Investigar na
+Fase 6 (Robustez) ou antes, se atrapalhar a Fase 5.## Fase 4 — Busca por Similaridade
+
+Endpoint `POST /query`: recebe uma pergunta em texto puro, gera o embedding via
+o mesmo `Embedder` usado na ingestão, e busca os chunks mais similares no
+Postgres via pgvector (`<=>`, cosine distance).
+
+### Decisões técnicas
+
+**Índice: HNSW em vez de IVFFlat**
+HNSW não exige treino prévio com dados representativos (IVFFlat precisa de
+uma amostra pra construir os clusters via k-means, ruim pra ingestão
+incremental como a nossa). Trade-off: construção do índice mais lenta e mais
+uso de RAM, mas melhor recall/latência de busca e não degrada com inserts
+sequenciais ao longo do tempo — que é exatamente o nosso padrão de uso.
+
+**Verbo HTTP: POST em vez de GET numa operação de busca**
+Tecnicamente quebra a convenção REST (GET = leitura, POST = escrita), mas o
+payload de entrada é texto livre potencialmente longo — query string tem
+limite prático de tamanho e é frágil pra texto com acentuação/caracteres
+especiais. Mesma escolha usada por APIs de busca semântica de mercado
+(Elasticsearch, Algolia).
+
+**Exposição de `similarity` em vez de `distance`**
+O pgvector retorna cosine _distance_ (0 = idêntico, 2 = oposto) — pouco
+intuitivo pra quem consome a API ("quanto menor, melhor" é contraintuitivo).
+Convertemos pra similarity (`1.0 - distance`) na fronteira handler↔API,
+mantendo o banco/índice trabalhando com distance (mais natural pro `ORDER BY`
+e pro índice).
+
+**Migrations nomeadas por schema, não por feature**
+A partir dessa fase, adotado o padrão `<timestamp>_<verbo>_<o_que>.sql`
+(ex: `add_hnsw_index_chunks_embedding.sql`). O nome descreve o que muda no
+schema, não em qual fase/feature foi feito — facilita entender o histórico
+do banco meses depois, sem depender de contexto do roadmap do produto.
+
+### Gotcha: `f32` vs `f64` no resultado do pgvector
+
+Os operadores `<=>` e `<#>` do pgvector retornam `double precision` (`f64`),
+não `real` (`f32`). Usar `sqlx::query_as!` com override de tipo
+(`"distance!: f32"`) **não gera erro de compilação** — o `!` desativa a
+checagem de tipo do SQLx. Em runtime, isso causa um bug silencioso: o SQLx
+decodifica os primeiros 4 bytes de um valor de 8 bytes como se fossem um
+`f32` completo, retornando um número plausível mas matematicamente sem
+relação com o valor real (reinterpretação binária, não conversão numérica).
+
+Sintoma observado: valores de `similarity` sempre negativos e, mais revelador,
+**idênticos independente do vetor de entrada** — sinal de que o resultado não
+tinha relação com o vetor calculado, e sim com um artefato de decodificação.
+
+Como foi encontrado: bisseção sistemática, eliminando camada por camada
+(tokenizer/pooling → ingestão → serialização do bind → operador SQL puro)
+até isolar com um teste de controle (vetor unitário conhecido `<#>` ele
+mesmo, esperado `-1.0` exato) que o erro só aparecia via SQLx com macro,
+nunca via `psql` direto — apontando pra decodificação, não cálculo.
+
+Correção: usar `f64` no struct de retorno e no override de tipo
+(`"distance!: f64"`), convertendo pra `f32` só na borda da API se necessário.
+
+**Lição geral**: overrides de tipo (`!:`) no SQLx desativam validação em
+compile-time — qualquer uso deles em coluna calculada (não vinda direto de
+uma coluna tipada da tabela) merece um teste de sanity check contra um valor
+matematicamente conhecido antes de confiar no resultado.
+
+### Pendência conhecida (não bloqueia a Fase 4)
+
+Identificada corrupção intermitente de espaços em texto de chunks após
+chunking (ex: "Para produtos" → "Paraprodutos"). Ainda não investigado a
+fundo — aparenta ser intermitente, não sistemático (alguns chunks do mesmo
+documento vêm corretos, outros não). Não afeta a lógica de busca vetorial em
+si (embeddings são gerados corretamente a partir do texto, corrompido ou
+não), mas degrada a qualidade do texto retornado ao usuário. Investigar na
+Fase 6 (Robustez) ou antes, se atrapalhar a Fase 5.
 
 ## Melhorias futuras
 
