@@ -14,17 +14,20 @@ use crate::{
     handlers::{
         get_document_handler, health_check_handler, ingest_document_handler, query_handler,
     },
+    llm::LlmClient,
 };
 
 mod chunking;
 mod db;
 mod embedding;
 mod handlers;
+mod llm;
 
 #[derive(Clone)]
 struct AppState {
     pool: PgPool,
     embedder: Embedder,
+    llm: LlmClient,
 }
 
 #[tokio::main]
@@ -33,6 +36,8 @@ async fn main() {
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let llm_base_url = env::var("LLM_BASE_URL").expect("LLM_BASE_URL must be set");
+    let llm_model = env::var("LLM_MODEL").expect("LLM_MODEL must be set");
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -42,7 +47,13 @@ async fn main() {
 
     let embedder = Embedder::new().expect("failed to load embedding model");
 
-    let state = AppState { pool, embedder };
+    let llm = LlmClient::new(&llm_base_url, &llm_model);
+
+    let state = AppState {
+        pool,
+        embedder,
+        llm,
+    };
 
     let app = Router::new()
         .route("/health", get(health_check_handler))

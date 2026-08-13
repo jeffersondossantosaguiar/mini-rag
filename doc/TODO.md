@@ -23,9 +23,9 @@ Plano completo e detalhes técnicos: [`doc/Fase-5.md`](./Fase-5.md)
 
 - [x] **L0** — Decisão de provider → **Ollama local** + HTTP puro com `reqwest`
 - [x] **L1** — Conceito da etapa de geração (fundo conceitual)
-- [ ] **L2** — Instalar Ollama e baixar modelo PT-BR
-- [ ] **L3** — `src/llm.rs`: cliente `reqwest` + chamada `/api/chat`
-- [ ] **L4** — Construção do prompt RAG (contexto + fontes)
+- [x] **L2** — Instalar Ollama e baixar modelo PT-BR → `qwen2.5:3b`
+- [x] **L3** — `src/llm.rs`: cliente `reqwest` + chamada `/api/chat`
+- [x] **L4** — Construção do prompt RAG (contexto + fontes)
 - [ ] **L5** — Resposta estruturada (`format: "json"`) + sources
 - [ ] **L6** — Integração no `/query` (orquestração)
 - [ ] **L7** — Revisão final da fase + ponte para Fase 6
@@ -33,8 +33,8 @@ Plano completo e detalhes técnicos: [`doc/Fase-5.md`](./Fase-5.md)
 ## Bug conhecido (Fase 6 ou antes)
 
 - [ ] Corrupção intermitente de espaços em chunks ("Para produtos" → "Paraprodutos").
-  Não bloqueia a busca vetorial, mas degrada o texto retornado ao usuário.
-  Ver pendência no `README.md`.
+      Não bloqueia a busca vetorial, mas degrada o texto retornado ao usuário.
+      Ver pendência no `README.md`.
 
 ## Como retomar
 

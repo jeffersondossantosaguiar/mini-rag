@@ -9,7 +9,7 @@
 | Item | Decisão | Por quê |
 |---|---|---|
 | Provider | **Ollama (local)** | Gratuito, roda local (faz parte do espírito do projeto, igual embeddings locais), sem chave de API |
-| Modelo | a definir na L2 | Precisa ser bom em PT-BR; máquina tem 15GB RAM (~7GB livres) |
+| Modelo | **`qwen2.5:3b`** | Cabe folgado na RAM (15GB total, ~7GB livres); 7b ficaria no limite
 | Chamada | **HTTP puro com `reqwest`** | Aprender Rust de verdade: ver request, headers, status, parsing com serde. SDK esconde isso |
 | Endpoint Ollama | `/api/chat` | Formato de mensagens (`system`/`user`), mais próximo do padrão de mercado |
 | Saída estruturada | `format: "json"` no body | Força o modelo a responder JSON → parseável com serde |
@@ -66,13 +66,17 @@ injetar contexto sem limite, senão estoura a janela do modelo.
 
 Objetivo: deixar `ollama serve` rodando e um modelo baixado.
 
-- [ ] Instalar Ollama (ver https://ollama.com)
-- [ ] `ollama pull <modelo>` — candidatos: `qwen2.5:3b` (~2GB, rápido, PT-BR ok)
-      vs `qwen2.5:7b` (~4.7GB, melhor qualidade, cabe na RAM)
-- [ ] Testar com `curl` cru antes de escrever Rust:
-      `curl http://localhost:11434/api/chat -d '{"model": "...", "messages": [{"role": "user", "content": "oi"}]}'`
-- [ ] Testar JSON mode: adicionar `"format": "json"` e ver a resposta
-- [ ] Anotar aqui qual modelo escolhemos e por quê (RAM/qualidade)
+- [x] Instalar Ollama (v0.32.9) — via script oficial (`curl ... | sh`), systemd ativo
+- [x] `ollama pull qwen2.5:3b` — **escolhido: 3b (~2GB)**
+      Motivo: 15GB RAM total (~7GB livres) → 3b cabe folgado e responde rápido;
+      7b (~4.7GB) ficaria no limite com risco de swap. Qualidade/conceitos não
+      mudam com o tamanho; upgrade (`ollama pull qwen2.5:7b`) é 1 comando depois.
+- [x] Testar com `curl` cru antes de escrever Rust — OK, resposta `"Oi!"`.
+      Lições: `done_reason: "stop"`, `prompt_eval_count`/`eval_count` (tokens
+      in/out), `total_duration` com cold start (~81s, `load_duration` 37s) vs
+      modelo quente (~0.75s).
+- [x] Testar JSON mode (`"format": "json"`) — OK, `content` virou JSON válido:
+      `{"answer": "Brasília"}`. Base da Aula 5.
 
 **Conceito:** o que é quantização e por que o tamanho do modelo (3B/7B = bilhões
 de parâmetros) afeta qualidade vs uso de RAM.
@@ -83,11 +87,16 @@ de parâmetros) afeta qualidade vs uso de RAM.
 Forma de um POST com corpo JSON: URL, headers, body, `error_for_status`.
 
 **Código:**
-- [ ] Adicionar `reqwest` (com feature `json`) ao `Cargo.toml`
-- [ ] Criar `src/llm.rs` com `LlmClient` (base URL `http://localhost:11434` + nome do modelo)
-- [ ] Função async `chat()` que monta o body do `/api/chat` e retorna o JSON cru
-- [ ] Registrar `mod llm;` no `main.rs`
-- [ ] Revisão: explicar cada linha e cada campo do body
+- [x] Adicionar `reqwest` 0.13 (com feature `json`) ao `Cargo.toml`
+- [x] Criar `src/llm.rs` com `LlmClient` (`reqwest::Client` + `base_url` + `model`)
+- [x] Função async `chat()` que monta o body do `/api/chat`, POSTa e retorna `message.content`
+- [x] Registrar `mod llm;` no `main.rs` + campo `llm` em `AppState`
+- [x] Config por env: `LLM_BASE_URL` / `LLM_MODEL` no `.env` (usuário antecipou Fase 6)
+- [x] Revisão: structs `Serialize` (request) e `Deserialize` (response), `.json()` nos dois sentidos,
+      `&str` vs `String` (ownership), `'static`, clone do `self.model` (não move de `&self`)
+
+**Decisão de design:** `chat(messages: Vec<ChatMessage>)` é "burro" (envia qualquer coisa);
+`build_rag_prompt(chunks, question)` é "esperto" (decide o que dizer). Separação de responsabilidades.
 
 ## Aula 4 — Construção do prompt RAG
 
@@ -96,15 +105,27 @@ instruir "responda apenas com base no contexto", marcar fontes, cortar o texto
 injetado.
 
 **Código:**
-- [ ] Builder de prompt que recebe os top-k de `db::search_similar_chunks`
-- [ ] Formatar cada chunk com marcador `[Fonte 1]`, `[Fonte 2]`, ...
-- [ ] System prompt em PT-BR (o usuário é PT-BR)
-- [ ] Revisão: comparar prompt bom vs ruim e criticar
+- [x] `SYSTEM_PROMPT` const em PT-BR (responder só do contexto, citar `[Fonte N]`, 1-3 sentenças)
+- [x] `build_rag_prompt(chunks, question)`: message `system` + message `user`
+      com `Contexto:\n...` (marcadores `[Fonte N]`) + `Pergunta: ...`
+- [x] Orçamento de tokens: `MAX_PROMPT_TOKENS = 2048`, contagem cumulativa com
+      `split_whitespace().count()` (proxy de tokens), `break` quando estourar
+      (chunks já vêm ordenados por similaridade)
+- [x] Revisão: enumerar `[Fonte N]` (index + 1); bug de lógica pego — `used_tokens`
+      não era incrementado no loop (compilador não pega erro de lógica, só de tipo)
 
 ## Aula 5 — Resposta estruturada + fontes
 
 **Conceito:** serde `Deserialize` na resposta, forçar JSON com `format: "json"`,
 mapear `[Fonte N]` de volta para ids de chunk/documento.
+
+**Ponto de partida da Aula 5 (onde paramos):**
+1. Tornar `ChatMessage` `pub` (está em assinatura `pub fn` → warning de privacidade).
+2. Mudar `chat()` para retornar o JSON cru (`body.message.content` já é o JSON do
+   `format: "json"` — o modelo responde `{"answer": "...", "sources": [...]}` dentro
+   dessa string). Revisar se `chat()` deve retornar `String` crua e um parser separado
+   decodificar.
+3. Structs `Answer`/`Sources` com `Deserialize` para o shape que o modelo responder.
 
 **Código:**
 - [ ] Structs `Answer` (campos da resposta JSON do Ollama)
