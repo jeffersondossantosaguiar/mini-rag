@@ -9,6 +9,7 @@ pub struct Document {
 }
 
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 pub struct Chunk {
     pub id: Uuid,
     pub document_id: Uuid,
@@ -17,7 +18,6 @@ pub struct Chunk {
 }
 
 pub struct ChunkSearchResult {
-    pub chunk_id: Uuid,
     pub document_id: Uuid,
     pub content: String,
     pub distance: f64,
@@ -82,35 +82,6 @@ pub async fn get_document(pool: &PgPool, id: Uuid) -> Result<Option<Document>, E
     .await
 }
 
-pub async fn create_chunks(
-    pool: &PgPool,
-    document_id: Uuid,
-    contents: &[String],
-) -> Result<Vec<Chunk>, Error> {
-    let mut chunks = Vec::with_capacity(contents.len());
-
-    //TODO Loop com INSERT individual, ao invés de batch insert — isso é uma escolha consciente de simplicidade pra Fase 2. Um INSERT em batch (múltiplas linhas numa query só) seria mais performático, mas o SQLx não tem uma forma tão direta de fazer isso com query_as! compile-time-checked pra arrays dinâmicos — normalmente isso pede UNNEST no SQL ou uma lib auxiliar. Fica registrado como possível melhoria de performance pra Fase 6 (Robustez), quando formos pensar em otimizações.
-    for (index, content) in contents.iter().enumerate() {
-        let chunk = query_as!(
-            Chunk,
-            r#"
-            INSERT INTO chunks (document_id, content, chunk_index)
-            VALUES ($1, $2, $3)
-            RETURNING id, document_id, content, chunk_index
-            "#,
-            document_id,
-            content,
-            index as i32
-        )
-        .fetch_one(pool)
-        .await?;
-
-        chunks.push(chunk);
-    }
-
-    Ok(chunks)
-}
-
 pub async fn search_similar_chunks(
     pool: &PgPool,
     query_embedding: Vector,
@@ -120,7 +91,6 @@ pub async fn search_similar_chunks(
         ChunkSearchResult,
         r#"
         SELECT
-            chunks.id as chunk_id,
             chunks.document_id,
             chunks.content,
             chunks.embedding <=> $1 as "distance!: f64"

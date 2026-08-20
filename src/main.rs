@@ -8,7 +8,7 @@ use dotenvy::dotenv;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
-use tracing_subscriber::fmt;
+use tracing_subscriber::EnvFilter;
 
 use crate::{
     embedding::Embedder,
@@ -34,7 +34,9 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .init();
     dotenv().ok();
 
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");

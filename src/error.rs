@@ -21,9 +21,6 @@ pub enum AppError {
 
     #[error("LLM error: {0}")]
     Llm(String),
-
-    #[error("Internal error: {0}")]
-    Internal(String),
 }
 
 impl IntoResponse for AppError {
