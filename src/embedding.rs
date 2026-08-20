@@ -1,4 +1,3 @@
-use sqlx::Row;
 use std::sync::{Arc, Mutex};
 
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};

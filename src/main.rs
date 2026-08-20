@@ -20,6 +20,7 @@ use crate::{
 mod chunking;
 mod db;
 mod embedding;
+mod error;
 mod handlers;
 mod llm;
 
