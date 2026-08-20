@@ -36,20 +36,28 @@ fn split_by_sentence(paragraph: &str, embedder: &Embedder) -> Vec<String> {
     let mut current = String::new();
 
     for sentence in sentences {
-        let candidate = format!("{} {}", current, sentence);
+        let candidate = if current.is_empty() {
+            sentence.to_string()
+        } else {
+            format!("{}{}", current, sentence) // current already ends with space
+        };
         if embedder.count_tokens(&candidate) > MAX_CHUNK_TOKENS && !current.is_empty() {
-            chunks.push(current.trim().to_string());
+            chunks.push(normalize_whitespace(&current));
             current = String::new();
         }
         current.push_str(sentence);
-        current.push(' '); // Adiciona um espaço entre sentenças
+        current.push(' ');
     }
 
     if !current.trim().is_empty() {
-        chunks.push(current.trim().to_string());
+        chunks.push(normalize_whitespace(&current));
     }
 
     chunks
+}
+
+fn normalize_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]
