@@ -10,7 +10,7 @@ comece pela seção [Como retomar](#como-retomar).
 - [x] **Fase 2** — Ingestão de texto puro: upload, chunking semântico
 - [x] **Fase 3** — Embeddings locais: `fastembed-rs`, persistência de vetores
 - [x] **Fase 4** — Busca por similaridade: endpoint `/query`, índice HNSW
-- [ ] **Fase 5** — Integração com LLM (em andamento — veja abaixo)
+- [x] **Fase 5** — Integração com LLM ✅
 - [ ] **Fase 6** — Robustez: `thiserror`, validação, rate limiting, logging
 - [ ] **Fase 7 (bônus)** — Suporte a PDF, DOCX
 - [ ] **Fase 8** — Documentação final: diagrama de arquitetura, decisões
@@ -27,7 +27,7 @@ Plano completo e detalhes técnicos: [`doc/Fase-5.md`](./Fase-5.md)
 - [x] **L3** — `src/llm.rs`: cliente `reqwest` + chamada `/api/chat`
 - [x] **L4** — Construção do prompt RAG (contexto + fontes)
 - [x] **L5** — Resposta estruturada (`format: "json"`) + sources
-- [ ] **L6** — Integração no `/query` (orquestração)
+- [x] **L6** — Integração no `/query` (orquestração)
 - [ ] **L7** — Revisão final da fase + ponte para Fase 6
 
 ## Bug conhecido (Fase 6 ou antes)

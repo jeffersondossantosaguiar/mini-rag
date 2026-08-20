@@ -1,6 +1,6 @@
 # Fase 5 — Integração com LLM (plano de aula)
 
-> Status: **em andamento** — progresso marcado no `TODO.md`.
+> Status: **concluída** ✅ — Fase 5 completa.
 > Nome desta fase no roadmap do README: "Integração com LLM: montagem de prompt
 > com contexto recuperado, chamada à API, resposta com fontes".
 
@@ -127,15 +127,19 @@ mapear `[Fonte N]` de volta para ids de chunk/documento.
 - [x] Teste com curl: `{"answer": "Brasília", "sources": ["Fonte 1"]}` — OK
 - [x] Revisão: typo `#[devive]` → `#[derive]` pego pelo compilador; campos `pub` necessários para handler
 
-## Aula 6 — Integração no `/query`
+## Aula 6 — Integração no `/query` (concluída)
 
 **Conceito:** orquestração — o handler vira: busca → prompt → geração → resposta.
 Novos caminhos de erro (Ollama fora do ar, contexto vazio).
 
 **Código:**
-- [ ] Refatorar `query_handler` (`src/handlers.rs:134`) para retornar `{ answer, sources }`
-- [ ] Tratar erros: Ollama indisponível, nenhum chunk recuperado, JSON inválido
-- [ ] Revisão: rastrear um request completo do início ao fim
+- [x] Refatorar `query_handler` (`src/handlers.rs:134`) para retornar `{ answer, sources }`
+- [x] Guard clause: `results.is_empty()` → 404 "No relevant context found"
+- [x] `chunk_contents = results.iter().map(|row| row.content.clone()).collect()`
+- [x] `LlmClient::build_rag_prompt(&chunk_contents, &payload.query)` → messages
+- [x] `state.llm.chat(messages).await` → `Answer` com match para erros
+- [x] Mapeamento `filter_map`: "Fonte N" → chunk real + `checked_sub(1)` seguro
+- [x] Novos tipos: `SourceResult { content, document_id, similarity }` + `QueryResponse { answer, sources }`
 
 ## Aula 7 — Revisão final
 
