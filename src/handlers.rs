@@ -14,6 +14,24 @@ pub struct CreateDocumentPayload {
     content: String,
 }
 
+impl CreateDocumentPayload {
+    pub fn validate(&self) -> Result<(), AppError> {
+        if self.title.trim().is_empty() {
+            return Err(AppError::Validation("title must not be empty".into()));
+        }
+        if self.title.len() > 200 {
+            return Err(AppError::Validation("title must be 200 chars or less".into()));
+        }
+        if self.content.trim().is_empty() {
+            return Err(AppError::Validation("content must not be empty".into()));
+        }
+        if self.content.len() > 100_000 {
+            return Err(AppError::Validation("content must be 100,000 chars or less".into()));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Serialize)]
 pub struct DocumentResponse {
     id: Uuid,
@@ -26,6 +44,21 @@ pub struct QueryRequest {
     query: String,
     #[serde(default = "default_top_k")]
     top_k: i32,
+}
+
+impl QueryRequest {
+    pub fn validate(&self) -> Result<(), AppError> {
+        if self.query.trim().is_empty() {
+            return Err(AppError::Validation("query must not be empty".into()));
+        }
+        if self.query.len() > 1000 {
+            return Err(AppError::Validation("query must be 1000 chars or less".into()));
+        }
+        if !(1..=20).contains(&self.top_k) {
+            return Err(AppError::Validation("top_k must be between 1 and 20".into()));
+        }
+        Ok(())
+    }
 }
 
 fn default_top_k() -> i32 {
@@ -53,6 +86,8 @@ pub async fn ingest_document_handler(
     State(state): State<AppState>,
     Json(payload): Json<CreateDocumentPayload>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    payload.validate()?;
+
     let chunk_contents = chunking::chunk_text(&payload.content, &state.embedder);
 
     if chunk_contents.is_empty() {
@@ -106,6 +141,8 @@ pub async fn query_handler(
     State(state): State<AppState>,
     Json(payload): Json<QueryRequest>,
 ) -> Result<Json<QueryResponse>, AppError> {
+    payload.validate()?;
+
     let query_embedding = state
         .embedder
         .embed(payload.query.clone())
