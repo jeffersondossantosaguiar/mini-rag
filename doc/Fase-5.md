@@ -119,19 +119,13 @@ injetado.
 **Conceito:** serde `Deserialize` na resposta, forçar JSON com `format: "json"`,
 mapear `[Fonte N]` de volta para ids de chunk/documento.
 
-**Ponto de partida da Aula 5 (onde paramos):**
-1. Tornar `ChatMessage` `pub` (está em assinatura `pub fn` → warning de privacidade).
-2. Mudar `chat()` para retornar o JSON cru (`body.message.content` já é o JSON do
-   `format: "json"` — o modelo responde `{"answer": "...", "sources": [...]}` dentro
-   dessa string). Revisar se `chat()` deve retornar `String` crua e um parser separado
-   decodificar.
-3. Structs `Answer`/`Sources` com `Deserialize` para o shape que o modelo responder.
-
 **Código:**
-- [ ] Structs `Answer` (campos da resposta JSON do Ollama)
-- [ ] Parse da resposta + caso de erro (JSON malformado)
-- [ ] Extração das fontes citadas e junção com os chunks recuperados
-- [ ] Revisão: quiz de serde + exercício "e se o LLM devolver lixo?"
+- [x] Struct `Answer { pub answer: String, pub sources: Vec<String> }` com `Deserialize`
+- [x] Parse em `chat()`: `from_str::<Answer>(&body.message.content).map_err(|e| anyhow::anyhow!(e))?`
+- [x] `chat()` retorna `Result<Answer, anyhow::Error>` (une `reqwest::Error` e `serde_json::Error`)
+- [x] System prompt atualizado: instrução explícita do shape JSON (`{"answer": "...", "sources": [...]}`)
+- [x] Teste com curl: `{"answer": "Brasília", "sources": ["Fonte 1"]}` — OK
+- [x] Revisão: typo `#[devive]` → `#[derive]` pego pelo compilador; campos `pub` necessários para handler
 
 ## Aula 6 — Integração no `/query`
 

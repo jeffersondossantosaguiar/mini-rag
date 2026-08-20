@@ -1,5 +1,6 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::from_str;
 
 #[derive(Clone)]
 pub struct LlmClient {
@@ -9,7 +10,7 @@ pub struct LlmClient {
 }
 
 #[derive(Serialize)]
-struct ChatMessage {
+pub struct ChatMessage {
     role: String,
     content: String,
 }
@@ -23,17 +24,27 @@ struct ChatRequest {
 }
 
 #[derive(Deserialize)]
-struct ResponseMessage {
+pub struct ResponseMessage {
     content: String,
 }
 
 #[derive(Deserialize)]
-struct ChatResponse {
+pub struct ChatResponse {
     message: ResponseMessage,
 }
 
+#[derive(Deserialize)]
+pub struct Answer {
+    pub answer: String,
+    pub sources: Vec<String>,
+}
+
 impl LlmClient {
-    const SYSTEM_PROMPT: &'static str = "Responda apenas com o contexto que sera passado, nao invente respostas. Se nao souber a resposta, diga que nao sabe. Cite as fontes que usar na resposta, ex: Fonte N; Responda em português;responda em 1 a 3 sentenças";
+    const SYSTEM_PROMPT: &'static str = "Você é um assistente de RAG. Responda APENAS com base no contexto fornecido.\n\
+        Não invente informações. Se o contexto não contiver a resposta, diga que não sabe.\n\
+        Cite as fontes que usar no formato \"Fonte N\".\n\
+        Responda em português, em 1 a 3 sentenças.\n\
+        Responda SEMPRE em JSON válido com o formato: {\"answer\": \"...\", \"sources\": [\"Fonte 1\", ...]}";
     const MAX_PROMPT_TOKENS: usize = 2048;
 
     pub fn new(base_url: &str, model: &str) -> Self {
@@ -44,7 +55,7 @@ impl LlmClient {
         }
     }
 
-    pub async fn chat(&self, messages: Vec<ChatMessage>) -> Result<String, reqwest::Error> {
+    pub async fn chat(&self, messages: Vec<ChatMessage>) -> Result<Answer, anyhow::Error> {
         let request = ChatRequest {
             model: self.model.clone(),
             messages,
@@ -60,7 +71,10 @@ impl LlmClient {
             .await?;
 
         let body: ChatResponse = response.json().await?;
-        Ok(body.message.content)
+
+        let answer = from_str(&body.message.content).map_err(|e| anyhow::anyhow!(e))?;
+
+        Ok(answer)
     }
 
     pub fn build_rag_prompt(chunks: &[String], question: &str) -> Vec<ChatMessage> {

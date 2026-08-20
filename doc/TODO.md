@@ -26,7 +26,7 @@ Plano completo e detalhes técnicos: [`doc/Fase-5.md`](./Fase-5.md)
 - [x] **L2** — Instalar Ollama e baixar modelo PT-BR → `qwen2.5:3b`
 - [x] **L3** — `src/llm.rs`: cliente `reqwest` + chamada `/api/chat`
 - [x] **L4** — Construção do prompt RAG (contexto + fontes)
-- [ ] **L5** — Resposta estruturada (`format: "json"`) + sources
+- [x] **L5** — Resposta estruturada (`format: "json"`) + sources
 - [ ] **L6** — Integração no `/query` (orquestração)
 - [ ] **L7** — Revisão final da fase + ponte para Fase 6
 
