@@ -25,7 +25,7 @@ Este projeto existe para aprender, na prática, os conceitos por trás de um pip
 - [x] **Fase 3** — Embeddings locais: integração com `fastembed-rs`, persistência de vetores
 - [x] **Fase 4** — Busca por similaridade: endpoint de query, índice IVFFlat/HNSW no pgvector
 - [x] **Fase 5** — Integração com LLM: montagem de prompt com contexto recuperado, chamada à API, resposta com fontes
-- [ ] **Fase 6** — Robustez: tratamento de erros (`thiserror`), validação, rate limiting, logging estruturado
+- [x] **Fase 6** — Robustez: tratamento de erros (`thiserror`), validação, rate limiting, logging estruturado
 - [ ] **Fase 7 (bônus)** — Suporte a outros formatos: PDF, DOCX
 - [ ] **Fase 8** — Documentação final: diagrama de arquitetura, decisões técnicas
 

@@ -11,7 +11,7 @@ comece pela seção [Como retomar](#como-retomar).
 - [x] **Fase 3** — Embeddings locais: `fastembed-rs`, persistência de vetores
 - [x] **Fase 4** — Busca por similaridade: endpoint `/query`, índice HNSW
 - [x] **Fase 5** — Integração com LLM ✅
-- [ ] **Fase 6** — Robustez: `thiserror`, validação, rate limiting, logging
+- [x] **Fase 6** — Robustez: `thiserror`, validação, rate limiting, logging ✅
 - [ ] **Fase 7 (bônus)** — Suporte a PDF, DOCX
 - [ ] **Fase 8** — Documentação final: diagrama de arquitetura, decisões
 
@@ -30,11 +30,9 @@ Plano completo e detalhes técnicos: [`doc/Fase-5.md`](./Fase-5.md)
 - [x] **L6** — Integração no `/query` (orquestração)
 - [ ] **L7** — Revisão final da fase + ponte para Fase 6
 
-## Bug conhecido (Fase 6 ou antes)
+## Bug corrigido
 
-- [ ] Corrupção intermitente de espaços em chunks ("Para produtos" → "Paraprodutos").
-      Não bloqueia a busca vetorial, mas degrada o texto retornado ao usuário.
-      Ver pendência no `README.md`.
+- [x] Corrupção intermitente de espaços em chunks — corrigido na Fase 6 L3.
 
 ## Como retomar
 
